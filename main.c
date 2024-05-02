@@ -46,7 +46,7 @@
 # define MAXREPEATS      10
 #endif
 #ifndef LATBENCH_COUNT
-# define LATBENCH_COUNT  10000000
+# define LATBENCH_COUNT  1000000
 #endif
 
 #ifdef __linux__
@@ -375,9 +375,22 @@ static uint32_t rand32()
     return (hi << 16) + lo;
 }
 
+inline uint64_t rdtsc(void){
+    union {
+        uint64_t val;
+        struct {
+            uint32_t lo;
+            uint32_t hi;
+        };
+    } tsc;
+    asm volatile ("rdtsc" : "=a" (tsc.lo), "=d" (tsc.hi));
+    return tsc.val;
+}
+
 int latency_bench(int size, int count, int use_hugepage)
 {
-    double t, t2, t_before, t_after, t_noaccess, t_noaccess2;
+    //double t, t2, t_before, t_after, t_noaccess, t_noaccess2;
+    uint64_t t, t2, t_before, t_after, t_noaccess, t_noaccess2;
     double xs, xs0, xs1, xs2;
     double ys, ys0, ys1, ys2;
     double min_t, min_t2;
@@ -405,20 +418,24 @@ int latency_bench(int size, int count, int use_hugepage)
 
     for (n = 1; n <= MAXREPEATS; n++)
     {
-        t_before = gettime();
+        //t_before = gettime();
+        t_before = rdtsc();
         random_read_test(buffer, count, 1);
-        t_after = gettime();
+        //t_after = gettime();
+        t_after = rdtsc();
         if (n == 1 || t_after - t_before < t_noaccess)
             t_noaccess = t_after - t_before;
 
-        t_before = gettime();
+        //t_before = gettime();
+        t_before = rdtsc();
         random_dual_read_test(buffer, count, 1);
-        t_after = gettime();
+        //t_after = gettime();
+        t_after = rdtsc();
         if (n == 1 || t_after - t_before < t_noaccess2)
             t_noaccess2 = t_after - t_before;
     }
 
-    printf("\nblock size : single random read / dual random read");
+    printf("\nnbits : single random read / dual random read");
     if (use_hugepage > 0)
         printf(", [MADV_HUGEPAGE]\n");
     else if (use_hugepage < 0)
@@ -426,7 +443,7 @@ int latency_bench(int size, int count, int use_hugepage)
     else
         printf("\n");
 
-    for (nbits = 10; (1 << nbits) <= size; nbits++)
+    for (nbits = 8; (1 << nbits) <= size; nbits++)
     {
         int testsize = 1 << nbits;
         xs1 = xs2 = ys = ys1 = ys2 = 0;
@@ -441,10 +458,12 @@ int latency_bench(int size, int count, int use_hugepage)
              */
             int testoffs = (rand32() % (size / testsize)) * testsize;
 
-            t_before = gettime();
+            //t_before = gettime();
+            t_before = rdtsc();
             random_read_test(buffer + testoffs, count, nbits);
-            t_after = gettime();
-            t = t_after - t_before - t_noaccess;
+            t_after = rdtsc();
+            //t_after = gettime();
+            t = t_after - t_before;//- t_noaccess;
             if (t < 0) t = 0;
 
             xs1 += t;
@@ -453,9 +472,11 @@ int latency_bench(int size, int count, int use_hugepage)
             if (n == 1 || t < min_t)
                 min_t = t;
 
-            t_before = gettime();
+            //t_before = gettime();
+            t_before = rdtsc();
             random_dual_read_test(buffer + testoffs, count, nbits);
-            t_after = gettime();
+            //t_after = gettime();
+            t_after = rdtsc();
             t2 = t_after - t_before - t_noaccess2;
             if (t2 < 0) t2 = 0;
 
@@ -473,8 +494,9 @@ int latency_bench(int size, int count, int use_hugepage)
                     break;
             }
         }
-        printf("%10d : %6.1f ns          /  %6.1f ns \n", (1 << nbits),
-            min_t * 1000000000. / count,  min_t2 * 1000000000. / count);
+        printf("%10d: %6.1f cycles       /  %6.1f cycles\n", nbits, min_t / count, min_t2 / count);
+        //printf("%10d : %6.1f ns          /  %6.1f ns \n", (1 << nbits),
+        //    min_t * 1000000000. / count,  min_t2 * 1000000000. / count);
     }
     free(buffer_alloc);
     return 1;
@@ -495,7 +517,7 @@ int main(void)
     printf("tinymembench v" VERSION " (simple benchmark for memory throughput and latency)\n");
 
 
-    poolbuf = alloc_four_nonaliased_buffers((void **)&srcbuf, bufsize,
+    /*poolbuf = alloc_four_nonaliased_buffers((void **)&srcbuf, bufsize,
                                             (void **)&dstbuf, bufsize,
                                             (void **)&tmpbuf, BLOCKSIZE,
                                             NULL, 0);
@@ -555,7 +577,7 @@ int main(void)
     }
 #endif
 
-    free(poolbuf);
+    free(poolbuf);*/
 
     printf("\n");
     printf("==========================================================================\n");
@@ -579,11 +601,11 @@ int main(void)
     printf("==         single reads performed one after another.                    ==\n");
     printf("==========================================================================\n");
 
-    if (!latency_bench(latbench_size, latbench_count, -1) ||
+    /*if (!latency_bench(latbench_size, latbench_count, -1) ||
         !latency_bench(latbench_size, latbench_count, 1))
-    {
+    {*/
         latency_bench(latbench_size, latbench_count, 0);
-    }
+    //}
 
     return 0;
 }

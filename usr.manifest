@@ -1,0 +1,2 @@
+/tinymembench: ${MODULE_DIR}/tinymembench
+/tinymembench_so: ${MODULE_DIR}/tinymembench_so
